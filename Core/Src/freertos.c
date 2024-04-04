@@ -31,6 +31,8 @@
 #include "bmp280.h"
 #include "BH1750.h"
 #include <stdio.h>
+#include "mpu6050.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -138,14 +140,8 @@ void sensor_data_producer(void *argument)
   bmp280.addr = BMP280_I2C_ADDRESS_0;
   bmp280.i2c = &hi2c1;
   float pressure, temperature, humidity;
-  while (!bmp280_init(&bmp280, &bmp280.params)) {
-  	size = sprintf((char *)Data, "BMP280 initialization failed\n");
-  	HAL_UART_Transmit(&huart1, Data, size, 1000);
-	osDelay(2000);
-  }
+  while (!bmp280_init(&bmp280, &bmp280.params));
   bool bme280p = bmp280.id == BME280_CHIP_ID;
-  size = sprintf((char *)Data, "BMP280: found %s\n", bme280p ? "BME280" : "BMP280");
-  HAL_UART_Transmit(&huart1, Data, size, 1000);
   /////-------BMP280 init--------/////
 
   /////-------BH1750 init--------/////
@@ -154,42 +150,40 @@ void sensor_data_producer(void *argument)
   BH1750_init_dev(test_dev);
   /////-------BH1750 init--------/////
 
-  //uint8_t buf[12];
+  ////-------MPU6050 init-------/////
+  MPU6050_t MPU6050;
+  while (MPU6050_Init(&hi2c1) == 1);
+  ////-------MPU6050 init-------/////
+
+
   /* Infinite loop */
   for(;;)
   {
-	//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	//strcpy((char*)buf, "Hello mf \r\n");
-	//HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
-
 	///--------------BMP280-----------------////
 	osDelay(100);;
-	while (!bmp280_read_float(&bmp280, &temperature, &pressure, &humidity)) {
-		size = sprintf((char *)Data,
-				"Temperature/pressure reading failed\n");
-		HAL_UART_Transmit(&huart1, Data, size, 1000);
-		osDelay(200);
-	}
-
-	size = sprintf((char *)Data,"Pressure: %.2f Pa, Temperature: %.2f C", pressure, temperature);
+	while (!bmp280_read_float(&bmp280, &temperature, &pressure, &humidity));
+	size = sprintf((char *)Data,"Pressure: %.2f Pa, Temperature: %.2f C \r\n", pressure, temperature);
 	HAL_UART_Transmit(&huart1, Data, size, 1000);
-	if (bme280p) {
-		size = sprintf((char *)Data,", Humidity: %.2f\n", humidity);
-		HAL_UART_Transmit(&huart1, Data, size, 1000);
-	}
 
-	else {
-		size = sprintf((char *)Data, "\n");
+	if (bme280p) {
+		size = sprintf((char *)Data,", Humidity: %.2f\r\n", humidity);
 		HAL_UART_Transmit(&huart1, Data, size, 1000);
 	}
-	osDelay(200);
+	osDelay(100);
 	///--------------BMP280-----------------///
+
 	/////------------BH1750--------/////
     test_dev->poll(test_dev);
-    size = sprintf((char *)Data,", Lumen: %u\n", (unsigned)test_dev->value);
+    size = sprintf((char *)Data,", Lumen: %u \r\n", (unsigned)test_dev->value);
     HAL_UART_Transmit(&huart1, Data, size, 1000);
 	osDelay(100);
 	/////-------BH1750--------/////
+	////-------MPU6050-------/////
+	MPU6050_Read_Gyro(&hi2c1, &MPU6050);
+	size = sprintf((char *)Data,", GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", MPU6050.Gx, MPU6050.Gy, MPU6050.Gz);
+	HAL_UART_Transmit(&huart1, Data, size, 1000);
+	////-------MPU6050-------/////
+	osDelay(2000);
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
   osThreadTerminate(NULL);
@@ -211,6 +205,7 @@ void bl_data_consumer(void *argument)
   {
     osDelay(1);
   }
+  osThreadTerminate(NULL);
   /* USER CODE END bl_data_consumer */
 }
 
