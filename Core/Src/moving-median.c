@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include "stm32f4xx_hal.h"
 
-void
-swap(int16_t * a, int16_t* b)
+void swap(float * a, float* b)
 {
-  int16_t temp;
+  float temp;
 
   temp = *a;
   *a = *b;
@@ -28,7 +27,7 @@ moving_median_create(movingMedian_t *context,
     context->size = filter_size;
   }
 
-  context->buffer = (int16_t*)malloc(filter_size * sizeof(int16_t));
+  context->buffer = (float*)malloc(filter_size * sizeof(float));
   context->index = 0;
   context->fill = 0;
   context->filtered = 0;
@@ -38,7 +37,7 @@ moving_median_create(movingMedian_t *context,
 
 void
 moving_median_filter(movingMedian_t *context,
-                     int16_t filter_input)
+                     float filter_input)
 {
   if ((HAL_GetTick() - context->last_time) > context->sample_time)
   {
@@ -50,7 +49,7 @@ moving_median_filter(movingMedian_t *context,
       context->fill++;
     }
 
-    int16_t *sort_buffer = (int16_t*)malloc(context->fill * sizeof(uint16_t));
+    float *sort_buffer = (float*)malloc(context->fill * sizeof(float));
 
     /* Replace old data by new */
     context->buffer[context->index] = filter_input;

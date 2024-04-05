@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdlib.h>
 #include "usart.h"
 #include "i2c.h"
 #include "bmp280.h"
@@ -33,6 +34,7 @@
 #include <stdio.h>
 #include "mpu6050.h"
 #include "moving-median.h"
+#include "circular_buffer.h"
 
 /* USER CODE END Includes */
 
@@ -40,28 +42,7 @@
 /* USER CODE BEGIN PTD */
 
 // Define a structure to represent sensor readings
-typedef struct {
-    float value;
-    float standard_deviation;
-    float median;
-    float min;
-    float max;
-} SensorStats;
 
-typedef struct {
-	SensorStats temperature;
-	SensorStats pressure;
-} Sensor_BMP280;
-
-typedef struct {
-	SensorStats gyro_x;
-	SensorStats gyro_y;
-	SensorStats gyro_z;
-} Sensor_MPU6050;
-
-typedef struct {
-	SensorStats lumen;
-} Sensor_BH1750;
 
 /* USER CODE END PTD */
 
@@ -77,7 +58,14 @@ typedef struct {
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-movingMedian_t med_filter;
+movingMedian_t med_filter_temperature;
+movingMedian_t med_filter_lumen;
+movingMedian_t med_filter_gyro_x;
+movingMedian_t med_filter_gyro_y;
+movingMedian_t med_filter_gyro_z;
+
+static uint8_t circular_buffer_storage_[CIRCULAR_BUFFER_SIZE] = {0};
+static cbuf_handle_t cbuf_handle = NULL;
 
 /* USER CODE END Variables */
 /* Definitions for sensorProduce */
@@ -112,6 +100,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+	cbuf_handle = circular_buf_init(circular_buffer_storage_, CIRCULAR_BUFFER_SIZE);
 
   /* USER CODE END Init */
 
@@ -160,15 +149,22 @@ void sensor_data_producer(void *argument)
   /* USER CODE BEGIN sensor_data_producer */
   uint16_t size;
   uint8_t Data[256];
-  moving_median_create(&med_filter, 11, 100);
+
+  //uint8_t * buffer  = malloc(sizeof(Data));
+  //cbuf_handle_t me = circular_buf_init(buffer, sizeof(Data));
+
+  moving_median_create(&med_filter_temperature, 5, 50);
+  moving_median_create(&med_filter_lumen, 5, 50);
+  moving_median_create(&med_filter_gyro_x, 5, 50);
+  moving_median_create(&med_filter_gyro_y, 5, 50);
+  moving_median_create(&med_filter_gyro_z, 5, 50);
   /////-------BMP280 init--------////
   BMP280_HandleTypedef bmp280;
   bmp280_init_default_params(&bmp280.params);
   bmp280.addr = BMP280_I2C_ADDRESS_0;
   bmp280.i2c = &hi2c1;
-  float pressure, temperature, humidity;
   while (!bmp280_init(&bmp280, &bmp280.params));
-  bool bme280p = bmp280.id == BME280_CHIP_ID;
+
   /////-------BMP280 init--------/////
 
   /////-------BH1750 init--------/////
@@ -181,45 +177,69 @@ void sensor_data_producer(void *argument)
   MPU6050_t MPU6050;
   while (MPU6050_Init(&hi2c1) == 1);
   ////-------MPU6050 init-------/////
-
+  SensorData sensor_data;
 
   /* Infinite loop */
   for(;;)
   {
 	///--------------BMP280-----------------////
 	//osDelay(100);;
-	while (!bmp280_read_float(&bmp280, &temperature, &pressure, &humidity));
+	while (!bmp280_read_float_temperature(&bmp280, &sensor_data.sensor_bmp280.temperature.value));
 
-	size = sprintf((char *)Data,"Pressure: %.2f Pa, Temperature: %.2f C \r\n", pressure, temperature);
-	HAL_UART_Transmit(&huart1, Data, size, 1000);
+	size = sprintf((char *)Data,"Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.value);
+	//HAL_UART_Transmit(&huart1, Data, size, 1000);
 
-	if (bme280p) {
-		size = sprintf((char *)Data,", Humidity: %.2f\r\n", humidity);
-		HAL_UART_Transmit(&huart1, Data, size, 1000);
-	}
+	moving_median_filter(&med_filter_temperature, sensor_data.sensor_bmp280.temperature.value);
+	sensor_data.sensor_bmp280.temperature.median = med_filter_temperature.filtered;
+	osDelay(10);
+	size = sprintf((char *)Data,"Filtered Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.median);
+	//HAL_UART_Transmit(&huart1, Data, size, 1000);
+
+
 	//osDelay(100);
 	///--------------BMP280-----------------///
 
 	/////------------BH1750--------/////
     test_dev->poll(test_dev);
-    Sensor_BH1750 sensor_bh1750;
-    sensor_bh1750.lumen.value = test_dev->value;
-    size = sprintf((char *)Data,", Lumen: %.2f \r\n", sensor_bh1750.lumen.value);
-    HAL_UART_Transmit(&huart1, Data, size, 1000);
-    //osDelay(100);
-    moving_median_filter(&med_filter, sensor_bh1750.lumen.value);
-    size = sprintf((char *)Data,", Filtered Lumen: %d \r\n", med_filter.filtered);
-    HAL_UART_Transmit(&huart1, Data, size, 1000);
+
+    sensor_data.sensor_bh1750.lumen.value = test_dev->value;
+    size = sprintf((char *)Data,", Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.value);
+    //HAL_UART_Transmit(&huart1, Data, size, 1000);
+
+    moving_median_filter(&med_filter_lumen, sensor_data.sensor_bh1750.lumen.value);
+    osDelay(10);
+    sensor_data.sensor_bh1750.lumen.median = med_filter_lumen.filtered;
+    size = sprintf((char *)Data,", Get from producer Filtered Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.median);
+
+    circular_buf_try_put(cbuf_handle, sensor_data.sensor_bh1750.lumen.median);
+    //HAL_UART_Transmit(&huart1, Data, size, 1000);
 	//osDelay(100);
 	/////-------BH1750--------/////
 
 	////-------MPU6050-------/////
 	MPU6050_Read_Gyro(&hi2c1, &MPU6050);
-	size = sprintf((char *)Data,", GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", MPU6050.Gx, MPU6050.Gy, MPU6050.Gz);
-	HAL_UART_Transmit(&huart1, Data, size, 1000);
+	sensor_data.sensor_mpu6050.gyro_x.value = MPU6050.Gx;
+	sensor_data.sensor_mpu6050.gyro_y.value = MPU6050.Gy;
+	sensor_data.sensor_mpu6050.gyro_z.value = MPU6050.Gz;
+	size = sprintf((char *)Data,", GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.value,
+			sensor_data.sensor_mpu6050.gyro_y.value, sensor_data.sensor_mpu6050.gyro_z.value);
+	//HAL_UART_Transmit(&huart1, Data, size, 1000);
+
+	moving_median_filter(&med_filter_gyro_x, sensor_data.sensor_mpu6050.gyro_x.value);
+	sensor_data.sensor_mpu6050.gyro_x.median = med_filter_gyro_x.filtered;
+	osDelay(10);
+	moving_median_filter(&med_filter_gyro_y, sensor_data.sensor_mpu6050.gyro_y.value);
+	sensor_data.sensor_mpu6050.gyro_y.median = med_filter_gyro_y.filtered;
+	osDelay(10);
+	moving_median_filter(&med_filter_gyro_z, sensor_data.sensor_mpu6050.gyro_z.value);
+	sensor_data.sensor_mpu6050.gyro_z.median = med_filter_gyro_z.filtered;
+	osDelay(10);
+	size = sprintf((char *)Data,", FILTERED GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.median,
+			sensor_data.sensor_mpu6050.gyro_y.median, sensor_data.sensor_mpu6050.gyro_z.median);
+	//HAL_UART_Transmit(&huart1, Data, size, 1000);
 	////-------MPU6050-------/////
 
-	//osDelay(100);
+	//osDelay(1000);
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
   osThreadTerminate(NULL);
@@ -235,11 +255,16 @@ void sensor_data_producer(void *argument)
 /* USER CODE END Header_bl_data_consumer */
 void bl_data_consumer(void *argument)
 {
+  const int capacity = circular_buf_capacity(cbuf_handle);
+  uint8_t Data;
+
   /* USER CODE BEGIN bl_data_consumer */
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	circular_buf_get(cbuf_handle, &Data);
+	HAL_UART_Transmit(&huart1, &Data, capacity, 1000);
+    osDelay(1000);
   }
   osThreadTerminate(NULL);
   /* USER CODE END bl_data_consumer */

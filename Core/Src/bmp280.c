@@ -331,6 +331,25 @@ bool bmp280_read_fixed(BMP280_HandleTypedef *dev, int32_t *temperature, uint32_t
 	return true;
 }
 
+bool bmp280_read_fixed_temperature(BMP280_HandleTypedef *dev, int32_t *temperature) {
+	int32_t adc_temp;
+	uint8_t data[8];
+
+
+	// Need to read in one sequence to ensure they match.
+	size_t size =  6;
+	if (read_data(dev, 0xf7, data, size)) {
+		return false;
+	}
+	adc_temp = data[3] << 12 | data[4] << 4 | data[5] >> 4;
+
+	int32_t fine_temp;
+	*temperature = compensate_temperature(dev, adc_temp, &fine_temp);
+
+	return true;
+}
+
+
 bool bmp280_read_float(BMP280_HandleTypedef *dev, float *temperature, float *pressure,
 		float *humidity) {
 	int32_t fixed_temperature;
@@ -345,5 +364,14 @@ bool bmp280_read_float(BMP280_HandleTypedef *dev, float *temperature, float *pre
 		return true;
 	}
 
+	return false;
+}
+
+bool bmp280_read_float_temperature(BMP280_HandleTypedef *dev, float *temperature) {
+	int32_t fixed_temperature;
+	if (bmp280_read_fixed_temperature(dev, &fixed_temperature)) {
+		*temperature = (float) fixed_temperature / 100;
+		return true;
+	}
 	return false;
 }

@@ -69,11 +69,11 @@ index +-->+                 DEMUX                 |
 
 typedef struct movingMedian_s
 {
-  int16_t *buffer;      /**< Data buffer pointer */
+  float *buffer;      /**< Data buffer pointer */
   uint16_t size;        /**< Size of filter buffer */
   uint16_t index;       /**< Current location in buffer */
-  uint16_t fill;        /**< Buffer filled level */
-  int16_t filtered;     /**< Filtered output */
+  float fill;        /**< Buffer filled level */
+  float filtered;     /**< Filtered output */
   uint16_t sample_time; /**< data sampling time interval */
   uint32_t last_time;   /**< last sampled time */
 } movingMedian_t;
@@ -94,6 +94,6 @@ void moving_median_create(movingMedian_t *context, uint16_t filter_size, uint16_
  * @param context [in] instance of filter object
  * @param input [in] data sample to filter
  */
-void moving_median_filter(movingMedian_t *context, int16_t input);
+void moving_median_filter(movingMedian_t *context, float input);
 
 #endif // BM_ba0db310_806f_11e9_a3ac_f914ac843fcc
