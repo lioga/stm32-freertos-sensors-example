@@ -80,7 +80,7 @@ osThreadId_t BLConsumerHandle;
 const osThreadAttr_t BLConsumer_attributes = {
   .name = "BLConsumer",
   .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityBelowNormal7,
+  .priority = (osPriority_t) osPriorityHigh,
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -188,9 +188,11 @@ void sensor_data_producer(void *argument)
 
 	size = sprintf((char *)Data,"Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.value);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
+	circular_buf_try_put(cbuf_handle, sensor_data.sensor_bmp280.temperature.value);
 
 	moving_median_filter(&med_filter_temperature, sensor_data.sensor_bmp280.temperature.value);
 	sensor_data.sensor_bmp280.temperature.median = med_filter_temperature.filtered;
+	circular_buf_try_put(cbuf_handle, sensor_data.sensor_bmp280.temperature.median);
 	osDelay(10);
 	size = sprintf((char *)Data,"Filtered Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.median);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
@@ -210,8 +212,6 @@ void sensor_data_producer(void *argument)
     osDelay(10);
     sensor_data.sensor_bh1750.lumen.median = med_filter_lumen.filtered;
     size = sprintf((char *)Data,", Get from producer Filtered Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.median);
-
-    circular_buf_try_put(cbuf_handle, sensor_data.sensor_bh1750.lumen.median);
     //HAL_UART_Transmit(&huart1, Data, size, 1000);
 	//osDelay(100);
 	/////-------BH1750--------/////
@@ -255,15 +255,20 @@ void sensor_data_producer(void *argument)
 /* USER CODE END Header_bl_data_consumer */
 void bl_data_consumer(void *argument)
 {
-  const int capacity = circular_buf_capacity(cbuf_handle);
-  uint8_t Data;
-
   /* USER CODE BEGIN bl_data_consumer */
+
+	uint8_t a;
+	uint8_t size;
+	uint8_t Data[20];
+
   /* Infinite loop */
   for(;;)
   {
-	circular_buf_get(cbuf_handle, &Data);
-	HAL_UART_Transmit(&huart1, &Data, capacity, 1000);
+	circular_buf_get(cbuf_handle, &a);
+	osDelay(10);
+	size = sprintf((char *)Data," %u \r\n", a);
+	osDelay(10);
+	HAL_UART_Transmit(&huart1, Data, size, 1000);
     osDelay(1000);
   }
   osThreadTerminate(NULL);
