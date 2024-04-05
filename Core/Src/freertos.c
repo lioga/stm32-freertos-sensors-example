@@ -64,7 +64,7 @@ movingMedian_t med_filter_gyro_x;
 movingMedian_t med_filter_gyro_y;
 movingMedian_t med_filter_gyro_z;
 
-static uint8_t circular_buffer_storage_[CIRCULAR_BUFFER_SIZE] = {0};
+static SensorData circular_buffer_storage_[CIRCULAR_BUFFER_SIZE] = {0};
 static cbuf_handle_t cbuf_handle = NULL;
 
 /* USER CODE END Variables */
@@ -79,7 +79,7 @@ const osThreadAttr_t sensorProduce_attributes = {
 osThreadId_t BLConsumerHandle;
 const osThreadAttr_t BLConsumer_attributes = {
   .name = "BLConsumer",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
 
@@ -147,8 +147,8 @@ void MX_FREERTOS_Init(void) {
 void sensor_data_producer(void *argument)
 {
   /* USER CODE BEGIN sensor_data_producer */
-  uint16_t size;
-  uint8_t Data[256];
+  //uint16_t size;
+  //uint8_t Data[256];
 
   //uint8_t * buffer  = malloc(sizeof(Data));
   //cbuf_handle_t me = circular_buf_init(buffer, sizeof(Data));
@@ -183,35 +183,33 @@ void sensor_data_producer(void *argument)
   for(;;)
   {
 	///--------------BMP280-----------------////
-	//osDelay(100);;
+
+	//get sensor value
 	while (!bmp280_read_float_temperature(&bmp280, &sensor_data.sensor_bmp280.temperature.value));
 
-	size = sprintf((char *)Data,"Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.value);
+	//size = sprintf((char *)Data,"Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.value);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
-	circular_buf_try_put(cbuf_handle, sensor_data.sensor_bmp280.temperature.value);
 
+	//apply filter
 	moving_median_filter(&med_filter_temperature, sensor_data.sensor_bmp280.temperature.value);
 	sensor_data.sensor_bmp280.temperature.median = med_filter_temperature.filtered;
-	circular_buf_try_put(cbuf_handle, sensor_data.sensor_bmp280.temperature.median);
-	osDelay(10);
-	size = sprintf((char *)Data,"Filtered Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.median);
+
+	//size = sprintf((char *)Data,"Filtered Temperature: %.2f C \r\n", sensor_data.sensor_bmp280.temperature.median);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
-
-
-	//osDelay(100);
 	///--------------BMP280-----------------///
 
 	/////------------BH1750--------/////
+	//get sensor value
     test_dev->poll(test_dev);
-
     sensor_data.sensor_bh1750.lumen.value = test_dev->value;
-    size = sprintf((char *)Data,", Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.value);
+    //size = sprintf((char *)Data,", Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.value);
     //HAL_UART_Transmit(&huart1, Data, size, 1000);
 
+    //apply filter
     moving_median_filter(&med_filter_lumen, sensor_data.sensor_bh1750.lumen.value);
-    osDelay(10);
+    //osDelay(10);
     sensor_data.sensor_bh1750.lumen.median = med_filter_lumen.filtered;
-    size = sprintf((char *)Data,", Get from producer Filtered Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.median);
+    //size = sprintf((char *)Data,", Get from producer Filtered Lumen: %.2f \r\n", sensor_data.sensor_bh1750.lumen.median);
     //HAL_UART_Transmit(&huart1, Data, size, 1000);
 	//osDelay(100);
 	/////-------BH1750--------/////
@@ -221,8 +219,8 @@ void sensor_data_producer(void *argument)
 	sensor_data.sensor_mpu6050.gyro_x.value = MPU6050.Gx;
 	sensor_data.sensor_mpu6050.gyro_y.value = MPU6050.Gy;
 	sensor_data.sensor_mpu6050.gyro_z.value = MPU6050.Gz;
-	size = sprintf((char *)Data,", GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.value,
-			sensor_data.sensor_mpu6050.gyro_y.value, sensor_data.sensor_mpu6050.gyro_z.value);
+	//size = sprintf((char *)Data,", GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.value,
+	//		sensor_data.sensor_mpu6050.gyro_y.value, sensor_data.sensor_mpu6050.gyro_z.value);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
 
 	moving_median_filter(&med_filter_gyro_x, sensor_data.sensor_mpu6050.gyro_x.value);
@@ -234,12 +232,12 @@ void sensor_data_producer(void *argument)
 	moving_median_filter(&med_filter_gyro_z, sensor_data.sensor_mpu6050.gyro_z.value);
 	sensor_data.sensor_mpu6050.gyro_z.median = med_filter_gyro_z.filtered;
 	osDelay(10);
-	size = sprintf((char *)Data,", FILTERED GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.median,
-			sensor_data.sensor_mpu6050.gyro_y.median, sensor_data.sensor_mpu6050.gyro_z.median);
+	//size = sprintf((char *)Data,", FILTERED GyroX: %.2f  GyroY: %.2f  GyroZ: %.2f \r\n", sensor_data.sensor_mpu6050.gyro_x.median,
+	//		sensor_data.sensor_mpu6050.gyro_y.median, sensor_data.sensor_mpu6050.gyro_z.median);
 	//HAL_UART_Transmit(&huart1, Data, size, 1000);
 	////-------MPU6050-------/////
+	circular_buf_put(cbuf_handle, sensor_data);
 
-	//osDelay(1000);
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
   osThreadTerminate(NULL);
@@ -256,17 +254,30 @@ void sensor_data_producer(void *argument)
 void bl_data_consumer(void *argument)
 {
   /* USER CODE BEGIN bl_data_consumer */
-
-	uint8_t a;
+	SensorData broadcast_sensor_data;
+	//uint8_t a;
 	uint8_t size;
-	uint8_t Data[20];
+	uint8_t Data[250];
 
   /* Infinite loop */
   for(;;)
   {
-	circular_buf_get(cbuf_handle, &a);
+	circular_buf_get(cbuf_handle, &broadcast_sensor_data);
 	osDelay(10);
-	size = sprintf((char *)Data," %u \r\n", a);
+	size = sprintf((char *)Data,"Lumen: Value %.2f  Median: %.2f \n "
+			"Temperature: Value %.2f  Median: %.2f \n "
+			"Gyro: Value X %.2f Y %.2f Z %.2f \n"
+			"Gyro: Median X %.2f Y %.2f Z %.2f \n",
+			broadcast_sensor_data.sensor_bh1750.lumen.value,
+			broadcast_sensor_data.sensor_bh1750.lumen.median,
+			broadcast_sensor_data.sensor_bmp280.temperature.value,
+			broadcast_sensor_data.sensor_bmp280.temperature.median,
+			broadcast_sensor_data.sensor_mpu6050.gyro_x.value,
+			broadcast_sensor_data.sensor_mpu6050.gyro_y.value,
+			broadcast_sensor_data.sensor_mpu6050.gyro_z.value,
+			broadcast_sensor_data.sensor_mpu6050.gyro_x.median,
+			broadcast_sensor_data.sensor_mpu6050.gyro_y.median,
+			broadcast_sensor_data.sensor_mpu6050.gyro_z.median);
 	osDelay(10);
 	HAL_UART_Transmit(&huart1, Data, size, 1000);
     osDelay(1000);

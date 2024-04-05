@@ -8,7 +8,7 @@
 // The definition of our circular buffer structure is hidden from the user
 struct circular_buf_t
 {
-	uint8_t* buffer;
+	SensorData* buffer;
 	size_t head;
 	size_t tail;
 	size_t max; // of the buffer
@@ -35,7 +35,7 @@ static void advance_head_pointer(cbuf_handle_t me)
 }
 
 
-cbuf_handle_t circular_buf_init(uint8_t* buffer, size_t size)
+cbuf_handle_t circular_buf_init(SensorData* buffer, size_t size)
 {
 	assert(buffer && size);
 
@@ -94,7 +94,7 @@ size_t circular_buf_capacity(cbuf_handle_t me)
 	return me->max;
 }
 
-void circular_buf_put(cbuf_handle_t me, uint8_t data)
+void circular_buf_put(cbuf_handle_t me, SensorData data)
 {
 	assert(me && me->buffer);
 
@@ -103,7 +103,7 @@ void circular_buf_put(cbuf_handle_t me, uint8_t data)
 	advance_head_pointer(me);
 }
 
-int circular_buf_try_put(cbuf_handle_t me, uint8_t data)
+int circular_buf_try_put(cbuf_handle_t me, SensorData data)
 {
 	int r = -1;
 
@@ -119,7 +119,7 @@ int circular_buf_try_put(cbuf_handle_t me, uint8_t data)
 	return r;
 }
 
-int circular_buf_get(cbuf_handle_t me, uint8_t* data)
+int circular_buf_get(cbuf_handle_t me, SensorData* data)
 {
 	assert(me && data && me->buffer);
 
@@ -150,25 +150,25 @@ bool circular_buf_full(cbuf_handle_t me)
 	return me->full;
 }
 
-int circular_buf_peek(cbuf_handle_t me, uint8_t* data, unsigned int look_ahead_counter)
-{
-	int r = -1;
-	size_t pos;
-
-	assert(me && data && me->buffer);
-
-	// We can't look beyond the current buffer size
-	if(circular_buf_empty(me) || look_ahead_counter > circular_buf_size(me))
-	{
-		return r;
-	}
-
-	pos = me->tail;
-	for(unsigned int i = 0; i < look_ahead_counter; i++)
-	{
-		data[i] = me->buffer[pos];
-		pos = advance_headtail_value(pos, me->max);
-	}
-
-	return 0;
-}
+//int circular_buf_peek(cbuf_handle_t me, uint8_t* data, unsigned int look_ahead_counter)
+//{
+//	int r = -1;
+//	size_t pos;
+//
+//	assert(me && data && me->buffer);
+//
+//	// We can't look beyond the current buffer size
+//	if(circular_buf_empty(me) || look_ahead_counter > circular_buf_size(me))
+//	{
+//		return r;
+//	}
+//
+//	pos = me->tail;
+//	for(unsigned int i = 0; i < look_ahead_counter; i++)
+//	{
+//		data[i] = me->buffer[pos];
+//		pos = advance_headtail_value(pos, me->max);
+//	}
+//
+//	return 0;
+//}
