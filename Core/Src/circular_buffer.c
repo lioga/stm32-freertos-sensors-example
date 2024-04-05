@@ -149,26 +149,3 @@ bool circular_buf_full(cbuf_handle_t me)
 
 	return me->full;
 }
-
-//int circular_buf_peek(cbuf_handle_t me, uint8_t* data, unsigned int look_ahead_counter)
-//{
-//	int r = -1;
-//	size_t pos;
-//
-//	assert(me && data && me->buffer);
-//
-//	// We can't look beyond the current buffer size
-//	if(circular_buf_empty(me) || look_ahead_counter > circular_buf_size(me))
-//	{
-//		return r;
-//	}
-//
-//	pos = me->tail;
-//	for(unsigned int i = 0; i < look_ahead_counter; i++)
-//	{
-//		data[i] = me->buffer[pos];
-//		pos = advance_headtail_value(pos, me->max);
-//	}
-//
-//	return 0;
-//}

@@ -3,7 +3,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#define  CIRCULAR_BUFFER_SIZE 10
+#define  CIRCULAR_BUFFER_SIZE 100
+
 typedef struct {
     float value;
     float standard_deviation;
@@ -98,7 +99,5 @@ size_t circular_buf_size(cbuf_handle_t me);
 /// Returns 0 if successful, -1 if data is not available
 int circular_buf_peek(cbuf_handle_t me, uint8_t* data, unsigned int look_ahead_counter);
 
-// TODO: int circular_buf_get_range(circular_buf_t me, uint8_t *data, size_t len);
-// TODO: int circular_buf_put_range(circular_buf_t me, uint8_t * data, size_t len);
 
 #endif // CIRCULAR_BUFFER_H_

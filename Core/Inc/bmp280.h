@@ -1,11 +1,3 @@
-/**
- * Ciastkolog.pl (https://github.com/ciastkolog)
- * 
-*/
-/**
- * The MIT License (MIT)
- * Copyright (c) 2016 sheinz (https://github.com/sheinz)
- */
 #ifndef __BMP280_H__
 #define __BMP280_H__
 
